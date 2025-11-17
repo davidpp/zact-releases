@@ -31,7 +31,7 @@ warn() {
 }
 
 step() {
-  echo -e "${BLUE}▶ $1${NC}"
+  echo -e "${BLUE}▶ $1${NC}" >&2
 }
 
 # Detect OS
