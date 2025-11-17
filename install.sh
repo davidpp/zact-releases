@@ -7,6 +7,7 @@ set -euo pipefail
 # Configuration
 REPO="${ZACT_REPO:-davidpp/zact-releases}"
 BINARY_NAME="zact"
+# Default to /usr/local/bin (already in PATH, may require sudo)
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # Colors
@@ -23,11 +24,11 @@ error() {
 }
 
 info() {
-  echo -e "${GREEN}$1${NC}"
+  echo -e "${GREEN}$1${NC}" >&2
 }
 
 warn() {
-  echo -e "${YELLOW}$1${NC}"
+  echo -e "${YELLOW}$1${NC}" >&2
 }
 
 step() {
@@ -131,17 +132,21 @@ install_binary() {
 
   step "Installing to ${INSTALL_DIR}..."
 
-  # Check if install directory exists
+  # Check if install directory exists and create if needed
   if [ ! -d "$INSTALL_DIR" ]; then
-    warn "Install directory ${INSTALL_DIR} does not exist"
-    info "Creating directory..."
-    if ! sudo mkdir -p "$INSTALL_DIR" 2>/dev/null; then
-      rm -rf "$tmp_dir"
-      error "Failed to create install directory: ${INSTALL_DIR}\n  Try setting INSTALL_DIR to a writable location:\n  INSTALL_DIR=~/.local/bin curl -fsSL ... | bash"
+    info "Creating ${INSTALL_DIR}..."
+    # Try without sudo first (for user directories)
+    if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+      # If that fails, try with sudo (for system directories)
+      warn "Administrator privileges required to create ${INSTALL_DIR}"
+      if ! sudo mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+        rm -rf "$tmp_dir"
+        error "Failed to create install directory: ${INSTALL_DIR}"
+      fi
     fi
   fi
 
-  # Check write permissions
+  # Install binary (with or without sudo depending on permissions)
   if [ -w "$INSTALL_DIR" ]; then
     # Can write without sudo
     if ! install -m 755 "$binary_path" "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null; then
@@ -149,11 +154,11 @@ install_binary() {
       error "Failed to install binary to ${INSTALL_DIR}"
     fi
   else
-    # Need sudo
-    info "Administrator privileges required for ${INSTALL_DIR}"
+    # Need sudo for system directories
+    warn "Administrator privileges required for ${INSTALL_DIR}"
     if ! sudo install -m 755 "$binary_path" "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null; then
       rm -rf "$tmp_dir"
-      error "Failed to install binary to ${INSTALL_DIR}\n  Try installing to user directory:\n  INSTALL_DIR=~/.local/bin curl -fsSL ... | bash"
+      error "Failed to install binary to ${INSTALL_DIR}"
     fi
   fi
 
